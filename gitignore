@@ -1,0 +1,53 @@
+# ===== Java compilado =====
+*.class
+*.jar
+*.war
+hs_err_pid*
+replay_pid*
+
+# ===== Maven =====
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+.mvn/wrapper/maven-wrapper.jar
+
+# ===== Gradle =====
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# ===== Salida de compilación (proyectos sin Maven/Gradle) =====
+bin/
+out/
+dist/
+
+# ===== VS Code =====
+.vscode/
+
+# ===== Extensión "Language Support for Java" (Red Hat) =====
+# Genera estos archivos cuando el proyecto no usa Maven/Gradle
+.classpath
+.project
+.settings/
+.factorypath
+
+# ===== Logs (el servidor genera un log global) =====
+*.log
+logs/
+log/
+
+# ===== Archivos temporales y del sistema =====
+*.tmp
+*.bak
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== Entregable =====
+*.zip
