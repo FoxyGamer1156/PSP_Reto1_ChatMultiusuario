@@ -15,9 +15,21 @@ Proyecto del reto de **Programación de Servicios y Procesos** (2º DAM).
 ## Estructura del proyecto
 
 ```
-/
-├── Servidor/    # Código fuente del servidor (consola)
-├── Cliente/     # Código fuente del cliente (JavaFX)
+/PSP_Reto1_ChatMultiusuario
+├── reto1_multiusuario
+    ├── src/
+        ├── main/
+            ├── java/
+                ├── reto1_multiusuario/
+                    ├── Cliente/
+                    ├── Server/
+                    ├── main
+                ├── module-info
+            ├── resources/
+                ├── styles/
+                ├── view/
+    ├── target
+    ├── pom.xml
 ├── .gitignore
 └── README.MD
 ```
@@ -50,15 +62,15 @@ cd Cliente
 
 ### Conectar y desconectar
 
-_Pendiente de completar: configurar IP y puerto, introducir el nombre de usuario, botones de conectar y desconectar._
+_El usuario introducira la IP y el puerto para conectarse al servidor._
 
 ### Enviar mensajes públicos
 
-_Pendiente de completar._
+_Los mensajes en publico se enviaran cuando la checkbox de "Privado" este desactivado._
 
 ### Enviar mensajes privados
 
-_Pendiente de completar._
+_Los mensajes en privado se enviaran cuando la checkbox de "Privado" este activa, y solo hablara con el cliente puesto._
 
 ## Funcionalidades
 
