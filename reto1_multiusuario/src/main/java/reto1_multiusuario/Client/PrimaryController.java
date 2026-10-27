@@ -1,4 +1,4 @@
-package reto1_multiusuario;
+package reto1_multiusuario.Client;
 
 import java.io.IOException;
 import javafx.fxml.FXML;
