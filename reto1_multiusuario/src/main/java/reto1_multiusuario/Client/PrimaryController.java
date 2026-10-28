@@ -8,6 +8,6 @@ public class PrimaryController {
 
     @FXML
     private void switchToSecondary() throws IOException {
-        main.setRoot("secondary");
+        main.setRoot("reto1_multiusuario\\src\\main\\resources\\view\\secondary.fxml");
     }
 }
