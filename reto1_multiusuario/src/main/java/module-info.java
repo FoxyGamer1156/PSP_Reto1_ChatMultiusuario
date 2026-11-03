@@ -6,5 +6,5 @@ module reto1_multiusuario {
     exports reto1_multiusuario;
 
     opens reto1_multiusuario.Client to javafx.graphics, javafx.fxml;
-    exports reto1_multiusuario.Client;
+    exports reto1_multiusuario.Client.Controller;
 }
