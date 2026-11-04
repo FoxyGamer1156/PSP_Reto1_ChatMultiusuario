@@ -1,10 +1,6 @@
 package reto1_multiusuario.Client.Controller;
 
-import java.io.EOFException;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -41,18 +37,15 @@ public class PantallaPrincipal {
     @FXML private Label lblChat;
     @FXML private ScrollPane scrollChat;
 
-    private Socket socket;
-    private ObjectOutputStream salida;
-    private ObjectInputStream entrada;
-    private volatile boolean conectado = false;
+    // Socket, streams, conectado y lockSalida estan ahora en Conexion
+    private final Conexion conexion = new Conexion();
     private String nombreUsuario = "";
-    private final Object lockSalida = new Object();
     private final StringBuilder chat = new StringBuilder();
     private boolean uiConectado = false;
 
     @FXML
     public void initialize() {
-        
+
         lblChat.setText("");
         lblChat.setWrapText(true);
         lblChat.setAlignment(Pos.TOP_LEFT);
@@ -116,7 +109,8 @@ public class PantallaPrincipal {
         final String ipFinal = ip;
         final int puertoFinal = puerto;
 
-        Thread receptor = new Thread(() -> conectarYRecibir(ipFinal, puertoFinal), "Hilo-Receptor");
+        // conectarYRecibir esta ahora en HiloReceptor
+        Thread receptor = new Thread(new HiloReceptor(this, conexion, ipFinal, puertoFinal, nombreUsuario), "Hilo-Receptor");
         receptor.setDaemon(true);   // no impide cerrar la aplicacion
         receptor.start();
     }
@@ -128,7 +122,7 @@ public class PantallaPrincipal {
 
     @FXML
     private void onEnviar() {
-        if (!conectado) {
+        if (!conexion.conectado) {
             return;
         }
         String texto = txtMensaje.getText().trim();
@@ -151,11 +145,11 @@ public class PantallaPrincipal {
                     avisar("No puedes enviarte un mensaje privado a ti mismo.");
                     return;
                 }
-                enviar("PRIVADO|" + destino + "|" + texto);
+                conexion.enviar("PRIVADO|" + destino + "|" + texto);
                 // Al privado no hay retransmision hacia nosotros: lo mostramos en local.
                 anadirLinea("[PRIVADO] tu -> " + destino + ": " + texto);
             } else {
-                enviar("PUBLICO|" + texto);
+                conexion.enviar("PUBLICO|" + texto);
                 // El mensaje publico lo mostrara el servidor al retransmitirlo a todos.
             }
             txtMensaje.clear();
@@ -166,125 +160,26 @@ public class PantallaPrincipal {
         txtMensaje.requestFocus();
     }
 
-
-    private void conectarYRecibir(String ip, int puerto) {
-        Socket nuevo = new Socket();
-        boolean llegoAConectar = false;
-        try {
-            nuevo.connect(new InetSocketAddress(ip, puerto), 5000);
-
-            // Mismo orden que el servidor: primero la salida y luego la entrada.
-            ObjectOutputStream out = new ObjectOutputStream(nuevo.getOutputStream());
-            out.flush();
-            ObjectInputStream in = new ObjectInputStream(nuevo.getInputStream());
-
-            synchronized (lockSalida) {
-                socket = nuevo;
-                salida = out;
-                entrada = in;
-                conectado = true;
-                salida.writeObject(nombreUsuario); 
-                salida.flush();
-            }
-            llegoAConectar = true;
-
-            Platform.runLater(() -> {
-                setConectado(true);
-                lblEstado.setText("Conectado");
-                ponerTitulo(TITULO + " - " + nombreUsuario);
-                anadirLinea("[SISTEMA] Conectado a " + ip + ":" + puerto + " como " + nombreUsuario + ".");
-            });
-
-            // Bucle de recepcion
-            while (conectado) {
-                Object recibido = in.readObject();
-                if (recibido instanceof String) {
-                    procesarMensaje((String) recibido);
-                }
-            }
-
-        } catch (EOFException e) {
-            if (conectado) {
-                mostrarDesdeHilo("[SISTEMA] El servidor ha cerrado la conexion.");
-            }
-        } catch (IOException | ClassNotFoundException e) {
-            if (!llegoAConectar) {
-                mostrarDesdeHilo("[SISTEMA] No se pudo conectar con " + ip + ":" + puerto
-                        + " (" + e.getMessage() + ")");
-            } else if (conectado) {
-                mostrarDesdeHilo("[SISTEMA] Conexion perdida: " + e.getMessage());
-            }
-        } finally {
-            cerrarConexion(nuevo);
-        }
-    }
-
-    private void procesarMensaje(String linea) {
-        String[] partes = linea.split("\\|", 3);
-
-        switch (partes[0]) {
-            case "PUBLICO":
-                if (partes.length == 3) {
-                    mostrarDesdeHilo("[PUBLICO] " + partes[1] + ": " + partes[2]);
-                }
-                break;
-            case "PRIVADO":
-                if (partes.length == 3) {
-                    mostrarDesdeHilo("[PRIVADO] " + partes[1] + " -> tu: " + partes[2]);
-                }
-                break;
-            case "SISTEMA":
-                if (partes.length >= 2) {
-                    String texto = partes.length == 3 ? partes[1] + "|" + partes[2] : partes[1];
-                    mostrarDesdeHilo("[SISTEMA] " + texto);
-                }
-                break;
-            default:
-                mostrarDesdeHilo(linea);
-        }
-    }
-    private void enviar(String mensaje) throws IOException {
-        synchronized (lockSalida) {
-            if (salida == null) {
-                throw new IOException("no hay conexion");
-            }
-            salida.writeObject(mensaje);
-            salida.flush();
-        }
-    }
     private void desconectar() {
-        if (!conectado) {
+        if (!conexion.conectado) {
             return;
         }
         try {
-            enviar("SALIR");
+            conexion.enviar("SALIR");
         } catch (IOException e) {
         }
         cerrarConexion(null);
         anadirLinea("[SISTEMA] Te has desconectado.");
     }
 
-   
-     
-    
-    @param propietario
-     
-    private void cerrarConexion(Socket propietario) {
-        synchronized (lockSalida) {
-            if (propietario != null && propietario != socket) {
-                cerrarSilencioso(propietario);
-            } else {
-                conectado = false;
-                cerrarSilencioso(entrada);
-                cerrarSilencioso(salida);
-                cerrarSilencioso(socket);
-                entrada = null;
-                salida = null;
-                socket = null;
-            }
-        }
+    /**
+     * Cierra la conexion con el servidor y deja la interfaz en "No conectado".
+     * La parte de cerrar el socket y los streams esta en Conexion.cerrar().
+     */
+    void cerrarConexion(Socket propietario) {
+        conexion.cerrar(propietario);
         Platform.runLater(() -> {
-            if (!conectado) {
+            if (!conexion.conectado) {
                 setConectado(false);
                 lblEstado.setText("No conectado");
                 ponerTitulo(TITULO);
@@ -292,17 +187,22 @@ public class PantallaPrincipal {
         });
     }
 
-    private void cerrarSilencioso(java.io.Closeable c) {
-        try {
-            if (c != null) c.close();
-        } catch (IOException e) {
-            // ignorado
-        }
+    /**
+     * Lo llama HiloReceptor cuando la conexion se ha establecido.
+     * (Es el bloque Platform.runLater que estaba dentro de conectarYRecibir.)
+     */
+    void mostrarConectado(String ip, int puerto) {
+        Platform.runLater(() -> {
+            setConectado(true);
+            lblEstado.setText("Conectado");
+            ponerTitulo(TITULO + " - " + nombreUsuario);
+            anadirLinea("[SISTEMA] Conectado a " + ip + ":" + puerto + " como " + nombreUsuario + ".");
+        });
     }
 
-    
+
     //Util
-    
+
 
     private void setConectado(boolean estado) {
         uiConectado = estado;
@@ -321,7 +221,7 @@ public class PantallaPrincipal {
         txtUsuario.setDisable(uiConectado);
     }
 
-    private void mostrarDesdeHilo(String texto) {
+    void mostrarDesdeHilo(String texto) {
         Platform.runLater(() -> anadirLinea(texto));
     }
 

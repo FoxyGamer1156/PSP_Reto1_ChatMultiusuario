@@ -38,4 +38,32 @@ public class GestorClientes {
     public synchronized int getNumConectados() {
         return clientes.size();
     }
+
+    /**
+     * Envia un mensaje a TODOS los clientes conectados (incluido el que lo
+     * ha escrito, porque el cliente espera recibir su propio mensaje publico).
+     *
+     * Es synchronized para que nadie entre o salga de la lista mientras
+     * la estamos recorriendo.
+     */
+    public synchronized void enviarATodos(String mensaje) {
+        for (HiloCliente cliente : clientes) {
+            cliente.enviar(mensaje);
+        }
+    }
+
+    /**
+     * Envia un mensaje solo al cliente que se llama "destino".
+     *
+     * @return true si se ha encontrado al destinatario, false si no esta conectado
+     */
+    public synchronized boolean enviarPrivado(String destino, String mensaje) {
+        for (HiloCliente cliente : clientes) {
+            if (cliente.getNombre().equals(destino)) {
+                cliente.enviar(mensaje);
+                return true;
+            }
+        }
+        return false;
+    }
 }
