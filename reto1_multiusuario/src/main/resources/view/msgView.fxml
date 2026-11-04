@@ -12,7 +12,7 @@
 <?import javafx.scene.shape.Line?>
 <?import javafx.scene.text.Font?>
 
-<Pane maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="400.0" prefWidth="600.0" xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1">
+<Pane maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="400.0" prefWidth="600.0" xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1">
    <children>
       <Label layoutX="14.0" layoutY="32.0" text="IP:" />
       <Label layoutX="115.0" layoutY="32.0" text="Puerto:" />
@@ -29,7 +29,7 @@
       <TextField layoutX="219.0" layoutY="353.0" prefHeight="26.0" prefWidth="307.0" />
       <TextField layoutX="144.0" layoutY="353.0" prefHeight="26.0" prefWidth="63.0" promptText="admin" />
       <TextField layoutX="31.0" layoutY="28.0" prefHeight="26.0" prefWidth="73.0" promptText="127.0.0.1" />
-      <TextField layoutX="159.0" layoutY="28.0" prefHeight="26.0" prefWidth="55.0" promptText="5000" />
+      <TextField layoutX="159.0" layoutY="28.0" prefHeight="26.0" prefWidth="55.0" promptText="5050" />
       <TextField layoutX="267.0" layoutY="28.0" prefHeight="26.0" prefWidth="55.0" promptText="Duxon" />
       <Button layoutX="533.0" layoutY="350.0" mnemonicParsing="false" text="Enviar" />
       <ScrollPane layoutX="6.0" layoutY="64.0" prefHeight="281.0" prefWidth="589.0">
