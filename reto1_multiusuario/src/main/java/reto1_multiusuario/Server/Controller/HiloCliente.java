@@ -51,6 +51,9 @@ public class HiloCliente implements Runnable {
 
     @Override
     public void run() {
+        // Indica si el cliente llego a entrar en el chat (si nos envio su nombre).
+        // Lo usamos en el finally para avisar de su salida solo si llego a entrar.
+        boolean haEntrado = false;
 
         try(
             ObjectOutputStream salida = new ObjectOutputStream(socket.getOutputStream());
@@ -61,8 +64,14 @@ public class HiloCliente implements Runnable {
 
             // 1. Lo primero que envia el cliente al conectarse es su nombre de usuario
             nombre = (String) entrada.readObject();
+
+            // Avisamos al resto ANTES de anadirlo a la lista: asi el aviso
+            // solo les llega a los que ya estaban, y no al que acaba de entrar.
+            gestor.enviarATodos("SISTEMA|" + nombre + " se ha unido al chat.");
+
             // Ya sabemos quien es: lo anadimos a la lista compartida
             gestor.agregar(this);
+            haEntrado = true;
             Log.escribir("Usuario '" + nombre + "' ha entrado (cliente " + numCliente + ")."
                     + " Conectados: " + gestor.getNumConectados());
 
@@ -119,6 +128,12 @@ public class HiloCliente implements Runnable {
             gestor.eliminar(this);
             Log.escribir("Usuario '" + nombre + "' ha salido."
                     + " Conectados: " + gestor.getNumConectados());
+
+            // Avisamos al resto DESPUES de quitarlo de la lista: asi no se
+            // intenta enviar el aviso al que se acaba de ir.
+            if (haEntrado) {
+                gestor.enviarATodos("SISTEMA|" + nombre + " ha salido del chat.");
+            }
             try {
                 socket.close();
             } catch (IOException e) {
