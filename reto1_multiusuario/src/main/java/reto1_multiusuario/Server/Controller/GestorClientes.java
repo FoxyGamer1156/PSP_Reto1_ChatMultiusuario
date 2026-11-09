@@ -2,68 +2,81 @@ package reto1_multiusuario.Server.Controller;
 
 import java.util.ArrayList;
 
-/**
- * Lista compartida de los clientes conectados al servidor.
- *
- * Solo existe UN objeto GestorClientes, que crea el MainServer y que se pasa
- * a todos los HiloCliente. Como todos los hilos acceden a la misma lista a la
- * vez (uno entra mientras otro sale...), es un recurso compartido.
- *
- * Por eso todos los metodos son synchronized: el monitor es este objeto,
- * asi que solo un hilo puede estar dentro de cualquiera de ellos a la vez.
- * Sin esto, dos hilos podrian modificar el ArrayList al mismo tiempo y
- * perderse un cliente o romperse la lista.
- */
+import reto1_multiusuario.Modelo.Mensaje;
+
 public class GestorClientes {
 
+    private final int maxClientes;
     private final ArrayList<HiloCliente> clientes = new ArrayList<>();
+    private final ArrayList<Mensaje> historial = new ArrayList<>();
 
-    /**
-     * Anade un cliente a la lista (cuando ya nos ha dicho su nombre).
-     */
-    public synchronized void agregar(HiloCliente cliente) {
-        clientes.add(cliente);
+    public GestorClientes(int maxClientes) {
+        this.maxClientes = maxClientes;
     }
 
-    /**
-     * Quita un cliente de la lista (cuando se desconecta).
-     */
+    public synchronized String agregar(HiloCliente cliente) {
+        String nombre = cliente.getNombre();
+        if (nombre == null || nombre.isBlank()) {
+            return "El nombre de usuario no es valido.";
+        }
+        if (clientes.size() >= maxClientes) {
+            return "Servidor lleno (maximo " + maxClientes + " usuarios). Prueba mas tarde.";
+        }
+        for (HiloCliente c : clientes) {
+            if (c.getNombre().equalsIgnoreCase(nombre)) {
+                return "El nombre '" + nombre + "' ya esta en uso.";
+            }
+        }
+        clientes.add(cliente);
+        return null;
+    }
+
     public synchronized void eliminar(HiloCliente cliente) {
         clientes.remove(cliente);
     }
 
-    /**
-     * Devuelve cuantos clientes hay conectados ahora mismo.
-     */
     public synchronized int getNumConectados() {
         return clientes.size();
     }
 
-    /**
-     * Envia un mensaje a TODOS los clientes conectados (incluido el que lo
-     * ha escrito, porque el cliente espera recibir su propio mensaje publico).
-     *
-     * Es synchronized para que nadie entre o salga de la lista mientras
-     * la estamos recorriendo.
-     */
-    public synchronized void enviarATodos(String mensaje) {
-        for (HiloCliente cliente : clientes) {
-            cliente.enviar(mensaje);
+    public synchronized String getNombres() {
+        ArrayList<String> nombres = new ArrayList<>();
+        for (HiloCliente c : clientes) {
+            nombres.add(c.getNombre());
+        }
+        return String.join(", ", nombres);
+    }
+
+    private synchronized ArrayList<HiloCliente> copiaClientes() {
+        return new ArrayList<>(clientes);
+    }
+
+    public void enviarATodos(Mensaje mensaje, HiloCliente excepto) {
+        for (HiloCliente c : copiaClientes()) {
+            if (c != excepto) {
+                c.enviar(mensaje);
+            }
         }
     }
 
-    /**
-     * Envia un mensaje solo al cliente que se llama "destino".
-     *
-     * @return true si se ha encontrado al destinatario, false si no esta conectado
-     */
-    public synchronized boolean enviarPrivado(String destino, String mensaje) {
-        for (HiloCliente cliente : clientes) {
-            if (cliente.getNombre().equals(destino)) {
-                cliente.enviar(mensaje);
+    public boolean enviarPrivado(Mensaje mensaje) {
+        for (HiloCliente c : copiaClientes()) {
+            if (c.getNombre().equalsIgnoreCase(mensaje.getDestinatario())) {
+                c.enviar(mensaje);
                 return true;
             }
         }
         return false;
+    }
+
+    public synchronized void guardarMensaje(Mensaje mensaje) {
+        historial.add(mensaje);
+    }
+
+    public synchronized Mensaje getUltimoMensaje() {
+        if (historial.isEmpty()) {
+            return null;
+        }
+        return historial.get(historial.size() - 1);
     }
 }
