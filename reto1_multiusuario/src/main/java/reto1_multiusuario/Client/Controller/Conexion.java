@@ -3,60 +3,40 @@ package reto1_multiusuario.Client.Controller;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 
-/**
- * Conexion con el servidor: socket, streams y los metodos para enviar y cerrar.
- *
- * Codigo movido tal cual desde PantallaPrincipal.
- */
+import reto1_multiusuario.Modelo.Mensaje;
+
 public class Conexion {
 
-    Socket socket;
-    ObjectOutputStream salida;
-    ObjectInputStream entrada;
-    volatile boolean conectado = false;
-    final Object lockSalida = new Object();
+    private final Socket socket = new Socket();
+    private ObjectOutputStream salida;
+    private ObjectInputStream entrada;
 
-    void enviar(String mensaje) throws IOException {
-        synchronized (lockSalida) {
-            if (salida == null) {
-                throw new IOException("no hay conexion");
-            }
-            salida.writeObject(mensaje);
-            salida.flush();
-        }
+    public synchronized void conectar(String ip, int puerto, String nombre) throws IOException {
+        socket.connect(new InetSocketAddress(ip, puerto), 5000);
+        salida = new ObjectOutputStream(socket.getOutputStream());
+        salida.flush();
+        entrada = new ObjectInputStream(socket.getInputStream());
+        salida.writeObject(nombre);
+        salida.flush();
     }
 
-    /**
-     * Cierra la conexion con el servidor.
-     *
-     * @param propietario socket del hilo receptor que pide cerrar. Si ya no es
-     *                    el socket actual (porque el usuario se ha vuelto a
-     *                    conectar), solo se cierra ese socket antiguo.
-     *                    Con null se cierra la conexion actual.
-     */
-    void cerrar(Socket propietario) {
-        synchronized (lockSalida) {
-            if (propietario != null && propietario != socket) {
-                cerrarSilencioso(propietario);
-            } else {
-                conectado = false;
-                cerrarSilencioso(entrada);
-                cerrarSilencioso(salida);
-                cerrarSilencioso(socket);
-                entrada = null;
-                salida = null;
-                socket = null;
-            }
-        }
+    public synchronized void enviar(Mensaje mensaje) throws IOException {
+        salida.writeObject(mensaje);
+        salida.flush();
+        salida.reset();
     }
 
-    private void cerrarSilencioso(java.io.Closeable c) {
+    public Mensaje recibir() throws IOException, ClassNotFoundException {
+        return (Mensaje) entrada.readObject();
+    }
+
+    public void cerrar() {
         try {
-            if (c != null) c.close();
-        } catch (IOException e) {
-            // ignorado
+            socket.close();
+        } catch (IOException ignorada) {
         }
     }
 }

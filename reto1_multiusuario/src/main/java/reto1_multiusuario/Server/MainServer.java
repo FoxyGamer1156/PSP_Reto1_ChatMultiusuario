@@ -1,31 +1,33 @@
 package reto1_multiusuario.Server;
 
+import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 
 import reto1_multiusuario.Server.Controller.GestorClientes;
 import reto1_multiusuario.Server.Controller.HiloCliente;
+import reto1_multiusuario.Server.Controller.HiloEstadisticas;
 
 public class MainServer {
-    private static final int PORT = 5050;
-    private static int contadorClientes = 0;
-    public static void main(String[] args) {
-        // Una sola lista para todo el servidor, que compartiran todos los hilos
-        GestorClientes gestor = new GestorClientes();
 
-        try(ServerSocket server = new ServerSocket(PORT);){
-            System.out.println("Servidor iniciado en el puerto " + PORT);
-            while(true){
-                Socket clientSocket = server.accept();
+    private static final int PUERTO = 5050;
+    private static final int MAX_CLIENTES = 10;
+    private static final int SEGUNDOS_ESTADISTICAS = 30;
+
+    public static void main(String[] args) {
+        GestorClientes gestor = new GestorClientes(MAX_CLIENTES);
+        new HiloEstadisticas(gestor, SEGUNDOS_ESTADISTICAS).start();
+
+        int contadorClientes = 0;
+        try (ServerSocket server = new ServerSocket(PUERTO)) {
+            Log.escribir("Servidor iniciado en el puerto " + PUERTO + " (maximo " + MAX_CLIENTES + " clientes).");
+            while (true) {
+                Socket socket = server.accept();
                 contadorClientes++;
-                HiloCliente hiloCliente = new HiloCliente(clientSocket, contadorClientes, gestor);
-                // start() crea un hilo nuevo que ejecutara run() en paralelo.
-                // Asi el main vuelve enseguida a accept() para atender al siguiente cliente.
-                new Thread(hiloCliente).start();
+                new Thread(new HiloCliente(socket, contadorClientes, gestor)).start();
             }
-        } catch (Exception e) {
-            System.out.println("Error en el servidor: " + e.getMessage());
+        } catch (IOException e) {
+            Log.escribir("Error en el servidor: " + e.getMessage());
         }
-        
     }
 }

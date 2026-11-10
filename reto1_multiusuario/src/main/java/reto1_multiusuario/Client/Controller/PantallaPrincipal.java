@@ -1,23 +1,19 @@
 package reto1_multiusuario.Client.Controller;
 
 import java.io.IOException;
-import java.net.Socket;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 
-import javafx.application.Platform;
 import javafx.fxml.FXML;
-import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
-import javafx.scene.control.ScrollPane;
+import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
-import javafx.scene.layout.Region;
 import javafx.stage.Stage;
-import javafx.stage.Window;
-
+import reto1_multiusuario.Modelo.Mensaje;
+import reto1_multiusuario.Modelo.Mensaje.Tipo;
 
 public class PantallaPrincipal {
 
@@ -34,43 +30,22 @@ public class PantallaPrincipal {
     @FXML private Button btnEnviar;
     @FXML private CheckBox chkPrivado;
     @FXML private Label lblEstado;
-    @FXML private Label lblChat;
-    @FXML private ScrollPane scrollChat;
+    @FXML private TextArea txtChat;
 
-    // Socket, streams, conectado y lockSalida estan ahora en Conexion
-    private final Conexion conexion = new Conexion();
+    private Conexion conexion;
+    private boolean conectado = false;
     private String nombreUsuario = "";
-    private final StringBuilder chat = new StringBuilder();
-    private boolean uiConectado = false;
 
     @FXML
     public void initialize() {
-
-        lblChat.setText("");
-        lblChat.setWrapText(true);
-        lblChat.setAlignment(Pos.TOP_LEFT);
-        lblChat.setPrefHeight(Region.USE_COMPUTED_SIZE);
-        scrollChat.setFitToWidth(true);
-        lblChat.heightProperty().addListener((obs, antes, ahora) ->
-                Platform.runLater(() -> scrollChat.setVvalue(1.0)));
-
-        chkPrivado.selectedProperty().addListener((obs, antes, ahora) -> refrescarControles());
-
-        setConectado(false);
-
-        lblChat.sceneProperty().addListener((obs, antigua, scene) -> {
-            if (scene != null) {
-                scene.windowProperty().addListener((o, antiguaV, ventana) -> engancharCierre(ventana));
-                engancharCierre(scene.getWindow());
-            }
-        });
+        refrescarControles();
     }
 
-    private void engancharCierre(Window ventana) {
-        if (ventana != null) {
-            ventana.setOnHiding(e -> desconectar());
-        }
+    @FXML
+    private void onPrivado() {
+        refrescarControles();
     }
+
     @FXML
     private void onConectar() {
         String ip = txtIp.getText().trim();
@@ -86,10 +61,10 @@ public class PantallaPrincipal {
         int puerto;
         try {
             puerto = Integer.parseInt(textoPuerto);
-            if (puerto < 1 || puerto > 65535) {
-                throw new NumberFormatException();
-            }
         } catch (NumberFormatException e) {
+            puerto = -1;
+        }
+        if (puerto < 1 || puerto > 65535) {
             avisar("El puerto debe ser un numero entre 1 y 65535.");
             return;
         }
@@ -97,32 +72,36 @@ public class PantallaPrincipal {
             avisar("Escribe un nombre de usuario.");
             return;
         }
-        if (nombre.contains("|")) {
-            avisar("El nombre de usuario no puede contener '|'.");
-            return;
-        }
 
         nombreUsuario = nombre;
-        lblEstado.setText("Conectando...");
+        conexion = new Conexion();
         btnConectar.setDisable(true);
-
-        final String ipFinal = ip;
-        final int puertoFinal = puerto;
-
-        // conectarYRecibir esta ahora en HiloReceptor
-        Thread receptor = new Thread(new HiloReceptor(this, conexion, ipFinal, puertoFinal, nombreUsuario), "Hilo-Receptor");
-        receptor.setDaemon(true);   // no impide cerrar la aplicacion
-        receptor.start();
+        lblEstado.setText("Conectando...");
+        new HiloReceptor(this, conexion, ip, puerto, nombre).start();
     }
 
     @FXML
-    private void onDesconectar() {
-        desconectar();
+    public void desconectar() {
+        if (conexion == null) {
+            return;
+        }
+        Conexion actual = conexion;
+        conexion = null;
+
+        if (conectado) {
+            try {
+                actual.enviar(new Mensaje(Tipo.SALIR, nombreUsuario, null, null));
+            } catch (IOException ignorada) {
+            }
+            anadirLinea("[SISTEMA] Te has desconectado.");
+        }
+        actual.cerrar();
+        marcarDesconectado();
     }
 
     @FXML
     private void onEnviar() {
-        if (!conexion.conectado) {
+        if (!conectado) {
             return;
         }
         String texto = txtMensaje.getText().trim();
@@ -130,110 +109,93 @@ public class PantallaPrincipal {
             return;
         }
 
-        try {
-            if (chkPrivado.isSelected()) {
-                String destino = txtDestinatario.getText().trim();
-                if (destino.isEmpty()) {
-                    avisar("Escribe el usuario destinatario en el campo 'Para:'.");
-                    return;
-                }
-                if (destino.contains("|")) {
-                    avisar("El nombre del destinatario no puede contener '|'.");
-                    return;
-                }
-                if (destino.equals(nombreUsuario)) {
-                    avisar("No puedes enviarte un mensaje privado a ti mismo.");
-                    return;
-                }
-                conexion.enviar("PRIVADO|" + destino + "|" + texto);
-                // Al privado no hay retransmision hacia nosotros: lo mostramos en local.
-                anadirLinea("[PRIVADO] tu -> " + destino + ": " + texto);
-            } else {
-                conexion.enviar("PUBLICO|" + texto);
-                // El mensaje publico lo mostrara el servidor al retransmitirlo a todos.
+        Mensaje mensaje;
+        if (chkPrivado.isSelected()) {
+            String destino = txtDestinatario.getText().trim();
+            if (destino.isEmpty()) {
+                avisar("Escribe el usuario destinatario en el campo 'Para:'.");
+                return;
             }
+            if (destino.equalsIgnoreCase(nombreUsuario)) {
+                avisar("No puedes enviarte un mensaje privado a ti mismo.");
+                return;
+            }
+            mensaje = new Mensaje(Tipo.PRIVADO, nombreUsuario, destino, texto);
+        } else {
+            mensaje = new Mensaje(Tipo.PUBLICO, nombreUsuario, null, texto);
+        }
+
+        try {
+            conexion.enviar(mensaje);
             txtMensaje.clear();
         } catch (IOException e) {
-            anadirLinea("[SISTEMA] Error al enviar el mensaje: " + e.getMessage());
-            cerrarConexion(null);
+            conexionTerminada(conexion, "Error al enviar el mensaje: " + e.getMessage());
         }
         txtMensaje.requestFocus();
     }
 
-    private void desconectar() {
-        if (!conexion.conectado) {
+    void conexionEstablecida(Conexion origen, String ip, int puerto) {
+        if (origen != conexion) {
             return;
         }
-        try {
-            conexion.enviar("SALIR");
-        } catch (IOException e) {
-        }
-        cerrarConexion(null);
-        anadirLinea("[SISTEMA] Te has desconectado.");
-    }
-
-    /**
-     * Cierra la conexion con el servidor y deja la interfaz en "No conectado".
-     * La parte de cerrar el socket y los streams esta en Conexion.cerrar().
-     */
-    void cerrarConexion(Socket propietario) {
-        conexion.cerrar(propietario);
-        Platform.runLater(() -> {
-            if (!conexion.conectado) {
-                setConectado(false);
-                lblEstado.setText("No conectado");
-                ponerTitulo(TITULO);
-            }
-        });
-    }
-
-    /**
-     * Lo llama HiloReceptor cuando la conexion se ha establecido.
-     * (Es el bloque Platform.runLater que estaba dentro de conectarYRecibir.)
-     */
-    void mostrarConectado(String ip, int puerto) {
-        Platform.runLater(() -> {
-            setConectado(true);
-            lblEstado.setText("Conectado");
-            ponerTitulo(TITULO + " - " + nombreUsuario);
-            anadirLinea("[SISTEMA] Conectado a " + ip + ":" + puerto + " como " + nombreUsuario + ".");
-        });
-    }
-
-
-    //Util
-
-
-    private void setConectado(boolean estado) {
-        uiConectado = estado;
+        conectado = true;
         refrescarControles();
+        lblEstado.setText("Conectado como " + nombreUsuario);
+        ponerTitulo(TITULO + " - " + nombreUsuario);
+        anadirLinea("[SISTEMA] Conectado a " + ip + ":" + puerto + " como " + nombreUsuario + ".");
+    }
+
+    void conexionTerminada(Conexion origen, String motivo) {
+        if (origen != conexion) {
+            return;
+        }
+        conexion = null;
+        origen.cerrar();
+        anadirLinea("[SISTEMA] " + motivo);
+        marcarDesconectado();
+    }
+
+    void mostrarMensaje(Mensaje mensaje) {
+        if (mensaje.getTipo() == Tipo.PUBLICO) {
+            anadirLinea("[PUBLICO] " + mensaje.getEmisor() + ": " + mensaje.getContenido());
+        } else if (mensaje.getTipo() == Tipo.PRIVADO) {
+            if (mensaje.getEmisor().equalsIgnoreCase(nombreUsuario)) {
+                anadirLinea("[PRIVADO] Tu -> " + mensaje.getDestinatario() + ": " + mensaje.getContenido());
+            } else {
+                anadirLinea("[PRIVADO] " + mensaje.getEmisor() + " -> Tu: " + mensaje.getContenido());
+            }
+        } else if (mensaje.getTipo() == Tipo.SISTEMA) {
+            anadirLinea("[SISTEMA] " + mensaje.getContenido());
+        }
+    }
+
+    private void marcarDesconectado() {
+        conectado = false;
+        refrescarControles();
+        lblEstado.setText("No conectado");
+        ponerTitulo(TITULO);
     }
 
     private void refrescarControles() {
-        btnConectar.setDisable(uiConectado);
-        btnDesconectar.setDisable(!uiConectado);
-        btnEnviar.setDisable(!uiConectado);
-        txtMensaje.setDisable(!uiConectado);
-        chkPrivado.setDisable(!uiConectado);
-        txtDestinatario.setDisable(!uiConectado || !chkPrivado.isSelected());
-        txtIp.setDisable(uiConectado);
-        txtPuerto.setDisable(uiConectado);
-        txtUsuario.setDisable(uiConectado);
-    }
-
-    void mostrarDesdeHilo(String texto) {
-        Platform.runLater(() -> anadirLinea(texto));
+        boolean conectando = conexion != null && !conectado;
+        btnConectar.setDisable(conectado || conectando);
+        btnDesconectar.setDisable(!conectado);
+        btnEnviar.setDisable(!conectado);
+        txtMensaje.setDisable(!conectado);
+        chkPrivado.setDisable(!conectado);
+        txtDestinatario.setDisable(!conectado || !chkPrivado.isSelected());
+        txtIp.setDisable(conectado || conectando);
+        txtPuerto.setDisable(conectado || conectando);
+        txtUsuario.setDisable(conectado || conectando);
     }
 
     private void anadirLinea(String texto) {
-        chat.append("[").append(LocalTime.now().format(HORA)).append("] ")
-            .append(texto).append("\n");
-        lblChat.setText(chat.toString());
+        txtChat.appendText("[" + LocalTime.now().format(HORA) + "] " + texto + "\n");
     }
 
     private void ponerTitulo(String titulo) {
-        if (lblChat.getScene() != null && lblChat.getScene().getWindow() instanceof Stage) {
-            ((Stage) lblChat.getScene().getWindow()).setTitle(titulo);
+        if (txtChat.getScene() != null && txtChat.getScene().getWindow() instanceof Stage) {
+            ((Stage) txtChat.getScene().getWindow()).setTitle(titulo);
         }
     }
 

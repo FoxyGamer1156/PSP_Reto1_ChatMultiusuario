@@ -3,8 +3,8 @@
 Aplicación de chat multiusuario en Java con arquitectura cliente-servidor.
 Proyecto del reto de **Programación de Servicios y Procesos** (2º DAM).
 
-- **Servidor:** aplicación de consola que gestiona las conexiones, un hilo por cliente y el log global.
-- **Cliente:** aplicación con interfaz gráfica en JavaFX.
+- **Servidor:** aplicación de consola. Crea un hilo por cliente, mantiene la lista de usuarios y el historial de mensajes, y escribe un log global.
+- **Cliente:** aplicación con interfaz gráfica en JavaFX. Recibe los mensajes en un hilo independiente.
 
 ## Autores
 
@@ -20,85 +20,94 @@ Proyecto del reto de **Programación de Servicios y Procesos** (2º DAM).
 │   ├── src/main/
 │   │   ├── java/
 │   │   │   ├── reto1_multiusuario/
-│   │   │   │   ├── Client/Controller/PantallaPrincipal.java
+│   │   │   │   ├── Modelo/Mensaje.java                 (objeto que viaja por el socket)
+│   │   │   │   ├── Server/MainServer.java              (main del servidor)
+│   │   │   │   ├── Server/Log.java                     (log global)
+│   │   │   │   ├── Server/Controller/GestorClientes.java
 │   │   │   │   ├── Server/Controller/HiloCliente.java
-│   │   │   │   ├── Server/mainServer.java
-│   │   │   │   └── main.java
+│   │   │   │   ├── Server/Controller/HiloEstadisticas.java
+│   │   │   │   ├── Client/Controller/PantallaPrincipal.java
+│   │   │   │   ├── Client/Controller/Conexion.java
+│   │   │   │   ├── Client/Controller/HiloReceptor.java
+│   │   │   │   └── main.java                           (main del cliente)
 │   │   │   └── module-info.java
-│   │   └── resources/
-│   │       ├── styles/
-│   │       └── view/msgView.fxml
-│   ├── target/
+│   │   └── resources/view/msgView.fxml
 │   └── pom.xml
-├── GUIA_SERVIDOR.md
-├── gitignore
 └── README.MD
 ```
 
 ## Requisitos
 
-- JDK **25**, tambien seleccionado como JDK de Maven.
-- Maven **3.9.x** actualizado.
-- JavaFX **25**, gestionado por Maven; no hace falta instalar un SDK separado.
-
-## Guia del servidor
-
-La [guia del servidor](GUIA_SERVIDOR.md) analiza esta version del proyecto y
-explica arquitectura, sockets, hilos, `synchronized`, protocolo, implementacion
-de referencia y pruebas locales con JDK 25.
-
-El servidor actual es inicial: llama a `run()` directamente y todavia no procesa
-mensajes. La referencia de la guia no se ha incorporado a las clases del proyecto.
+- JDK **25** (también seleccionado como JDK de Maven).
+- Maven **3.9.x**.
+- JavaFX **25**, gestionado por Maven.
 
 ## Cómo ejecutar el servidor
 
-Desde la raiz del repositorio, con JDK 25 y Maven disponibles:
+Desde la raíz del repositorio:
 
 ```powershell
 mvn -f reto1_multiusuario/pom.xml clean compile
-java -cp reto1_multiusuario/target/classes reto1_multiusuario.Server.mainServer
+java -cp reto1_multiusuario/target/classes reto1_multiusuario.Server.MainServer
 ```
 
-El servidor inicial escucha en el puerto **5050**. Todavia no ofrece el chat
-completo ni restringe la escucha a la interfaz local. La guia explica como
-desarrollar esas funciones y escuchar exclusivamente en `127.0.0.1`.
+Por defecto, el servidor:
+
+| Parámetro | Valor | Dónde se cambia |
+|---|---|---|
+| Puerto | 5050 | `MainServer.PUERTO` |
+| Máximo de clientes | 10 | `MainServer.MAX_CLIENTES` |
+| Intervalo de estadísticas | 30 s | `MainServer.SEGUNDOS_ESTADISTICAS` |
+
+El log se muestra por consola y además se guarda en `servidor.log`, en la carpeta desde donde se lance el servidor.
+Cada 30 segundos se imprime una línea `[ESTADO]` con los usuarios conectados, el tiempo activo y el último mensaje.
 
 ## Cómo ejecutar el cliente
 
-En otro terminal, desde la raiz del repositorio:
+En otra terminal, desde la raíz del repositorio (se pueden abrir varios clientes):
 
 ```powershell
 mvn -f reto1_multiusuario/pom.xml javafx:run
 ```
 
-Se abre la vista JavaFX actual. El controlador y las acciones de conexion y envio
-estan pendientes de implementar. La IP local prevista es **127.0.0.1** y el
-puerto sugerido es **5050**. `promptText` es solo una sugerencia, no un valor.
-
-Para comprobar las herramientas: `java -version`, `javac -version` y
-`mvn -version`. Esta revision no pudo compilarse ni ejecutarse en el terminal
-de trabajo porque no encuentra esas herramientas en el `PATH`.
-
 ## Cómo usar la aplicación
 
 ### Conectar y desconectar
 
-_El usuario introducira la IP y el puerto para conectarse al servidor._
+1. Escribe la IP y el puerto del servidor. Si los dejas vacíos, se usan `127.0.0.1` y `5050`.
+2. Escribe tu nombre de usuario y pulsa **Conectar**.
+3. El nombre de usuario se muestra en la barra de título y junto a los botones ("Conectado como ...").
+4. Pulsa **Desconectar** para salir. Cerrar la ventana también desconecta.
+
+El servidor rechaza la conexión, y el cliente muestra el motivo, si:
+- el servidor está lleno, o
+- ya hay un usuario conectado con ese nombre.
 
 ### Enviar mensajes públicos
 
-_Los mensajes en publico se enviaran cuando la checkbox de "Privado" este desactivado._
+Con la casilla **Privado** desmarcada, escribe el mensaje y pulsa **Enviar** (o Enter). Lo reciben todos los usuarios conectados.
 
 ### Enviar mensajes privados
 
-_Los mensajes en privado se enviaran cuando la checkbox de "Privado" este activa, y solo hablara con el cliente puesto._
+Marca **Privado**, escribe el nombre del destinatario en **Para:** y envía el mensaje. Solo lo reciben el destinatario y el emisor. Si el destinatario no está conectado, el servidor avisa.
+
+### Cómo se ven los mensajes
+
+```
+[18:20:01] [SISTEMA] Luis se ha unido al chat.
+[18:20:05] [PUBLICO] Ana: hola a todos
+[18:20:09] [PRIVADO] Ana -> Tu: hola Luis
+[18:20:12] [PRIVADO] Tu -> Ana: que tal
+```
 
 ## Funcionalidades
 
-- [ ] Múltiples clientes simultáneos (un hilo por cliente)
-- [ ] Mensajes públicos y privados
-- [ ] Aviso al resto de usuarios cuando entra un nuevo cliente
-- [ ] Log global (entradas, salidas y mensajes)
-- [ ] Límite máximo de clientes conectados
-- [ ] Información periódica en consola (usuarios conectados, tiempo activo y último mensaje)
-- [ ] Recepción de mensajes en hilo independiente y actualización segura de la interfaz
+- [x] Múltiples clientes simultáneos (un hilo por cliente)
+- [x] Mensajes públicos y privados
+- [x] Aviso al resto de usuarios cuando entra o sale un cliente
+- [x] Log global (entradas, salidas y mensajes) en consola y en archivo
+- [x] Lista de usuarios conectados e historial de mensajes en el servidor
+- [x] Límite máximo de clientes conectados
+- [x] Información periódica en consola (usuarios conectados, tiempo activo y último mensaje)
+- [x] Recepción de mensajes en hilo independiente y actualización segura de la interfaz (`Platform.runLater`)
+- [x] Sincronización de recursos compartidos con `synchronized`
